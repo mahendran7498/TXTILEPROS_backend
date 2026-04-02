@@ -12,7 +12,6 @@ const { ensureDefaultUsers } = require('../utils/bootstrap');
 const app = express();
 const MONGO_URI = process.env.MONGO_URI;
 const defaultAllowedOrigins = [
-  'http://localhost:5173',
   'https://txtilepros-frontend.vercel.app',
 ];
 const envAllowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || '')
