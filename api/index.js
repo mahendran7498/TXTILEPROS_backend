@@ -11,13 +11,16 @@ const { ensureDefaultUsers } = require('../utils/bootstrap');
 
 const app = express();
 const MONGO_URI = process.env.MONGO_URI;
+
 const defaultAllowedOrigins = [
   'https://txtilepros-frontend.vercel.app',
 ];
+
 const envAllowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || '')
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
+
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envAllowedOrigins])];
 
 let initPromise;
@@ -27,13 +30,11 @@ function connectAndBootstrap() {
   if (!MONGO_URI) {
     throw new Error('Missing MONGO_URI.');
   }
-
   if (!initPromise) {
     initPromise = mongoose.connect(MONGO_URI).then(async () => {
       await ensureDefaultUsers();
     });
   }
-
   return initPromise;
 }
 
@@ -57,6 +58,7 @@ function applyCorsHeaders(req, res) {
 }
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+
 app.use((req, res, next) => {
   applyCorsHeaders(req, res);
   if (req.method === 'OPTIONS') {
@@ -64,6 +66,7 @@ app.use((req, res, next) => {
   }
   return next();
 });
+
 app.use(
   cors({
     origin(origin, callback) {
@@ -79,6 +82,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
 app.use(express.json({ limit: '30mb' }));
 app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
@@ -111,11 +115,20 @@ app.use((err, req, res, next) => {
   });
 });
 
+// ✅ Vercel serverless export — CORS preflight handled FIRST before any async work
 module.exports = async (req, res) => {
   const requestPath = String(req.url || '');
 
+  // Step 1: Always apply CORS headers immediately
+  applyCorsHeaders(req, res);
+
+  // Step 2: Handle OPTIONS preflight before DB connection
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  // Step 3: Health check — no DB needed
   if (requestPath === '/api/health' || requestPath.startsWith('/api/health?')) {
-    applyCorsHeaders(req, res);
     return res.status(200).json({
       status: 'ok',
       service: 'employee-work-reporting',
@@ -124,12 +137,12 @@ module.exports = async (req, res) => {
     });
   }
 
+  // Step 4: Connect DB and handle request
   try {
     await connectAndBootstrap();
     registerRoutes();
     return app(req, res);
   } catch (error) {
-    applyCorsHeaders(req, res);
     console.error('Server initialization failed:', error.message);
     return res.status(500).json({
       error: error.message || 'Server initialization failed.',
