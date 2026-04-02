@@ -1,16 +1,4 @@
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-
-const uploadRoot = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, '..', 'uploads');
-const uploadDir = path.join(uploadRoot, 'reports');
-fs.mkdirSync(uploadDir, { recursive: true });
-
-const allowedMimeTypes = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-};
+const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 function storePhotos(uploads = []) {
   const safeUploads = Array.isArray(uploads) ? uploads.slice(0, 2) : [];
@@ -25,18 +13,18 @@ function storePhotos(uploads = []) {
     }
 
     const mimeType = match[1];
-    const extension = allowedMimeTypes[mimeType];
-    const buffer = Buffer.from(match[2], 'base64');
+    if (!allowedMimeTypes.has(mimeType)) {
+      const error = new Error('Unsupported photo format.');
+      error.status = 400;
+      throw error;
+    }
 
+    const buffer = Buffer.from(match[2], 'base64');
     if (buffer.length > 5 * 1024 * 1024) {
       const error = new Error('Each photo must be smaller than 5MB.');
       error.status = 400;
       throw error;
     }
-
-    const fileName = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
-    const absolutePath = path.join(uploadDir, fileName);
-    fs.writeFileSync(absolutePath, buffer);
 
     const kind = String(upload.kind || '').toLowerCase();
     if (!validKinds.has(kind)) {
@@ -47,11 +35,10 @@ function storePhotos(uploads = []) {
 
     return {
       kind,
-      fileName,
-      originalName: upload.name || fileName,
+      originalName: upload.name || `${kind}.jpg`,
       mimeType,
       size: buffer.length,
-      url: `/uploads/reports/${fileName}`,
+      dataUrl: String(upload.dataUrl),
     };
   });
 }

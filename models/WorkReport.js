@@ -3,11 +3,10 @@ const mongoose = require('mongoose');
 const photoSchema = new mongoose.Schema(
   {
     kind: { type: String, enum: ['before', 'after'], required: true },
-    fileName: String,
     originalName: String,
     mimeType: String,
     size: Number,
-    url: String,
+    dataUrl: { type: String, required: true },
   },
   { _id: false }
 );
