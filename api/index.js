@@ -116,6 +116,7 @@ module.exports = async (req, res) => {
   const requestPath = String(req.url || '');
 
   if (requestPath === '/api/health' || requestPath.startsWith('/api/health?')) {
+    applyCorsHeaders(req, res);
     return res.status(200).json({
       status: 'ok',
       service: 'employee-work-reporting',
@@ -129,6 +130,7 @@ module.exports = async (req, res) => {
     registerRoutes();
     return app(req, res);
   } catch (error) {
+    applyCorsHeaders(req, res);
     console.error('Server initialization failed:', error.message);
     return res.status(500).json({
       error: error.message || 'Server initialization failed.',
