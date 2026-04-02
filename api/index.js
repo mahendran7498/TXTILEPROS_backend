@@ -22,6 +22,7 @@ const envAllowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 
 const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envAllowedOrigins])];
 
 let initPromise;
+let routesRegistered = false;
 
 function connectAndBootstrap() {
   if (!MONGO_URI) {
@@ -35,6 +36,14 @@ function connectAndBootstrap() {
   }
 
   return initPromise;
+}
+
+function registerRoutes() {
+  if (routesRegistered) return;
+  app.use('/api/auth', require('../routes/auth'));
+  app.use('/api/reports', require('../routes/reports'));
+  app.use('/api/admin', require('../routes/admin'));
+  routesRegistered = true;
 }
 
 function applyCorsHeaders(req, res) {
@@ -96,10 +105,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.use('/api/auth', require('../routes/auth'));
-app.use('/api/reports', require('../routes/reports'));
-app.use('/api/admin', require('../routes/admin'));
-
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(err.status || 500).json({
@@ -121,6 +126,7 @@ module.exports = async (req, res) => {
 
   try {
     await connectAndBootstrap();
+    registerRoutes();
     return app(req, res);
   } catch (error) {
     console.error('Server initialization failed:', error.message);
