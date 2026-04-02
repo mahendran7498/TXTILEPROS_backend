@@ -108,6 +108,17 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = async (req, res) => {
+  const requestPath = String(req.url || '');
+
+  if (requestPath === '/api/health' || requestPath.startsWith('/api/health?')) {
+    return res.status(200).json({
+      status: 'ok',
+      service: 'employee-work-reporting',
+      timestamp: new Date().toISOString(),
+      databaseConfigured: Boolean(MONGO_URI),
+    });
+  }
+
   try {
     await connectAndBootstrap();
     return app(req, res);
