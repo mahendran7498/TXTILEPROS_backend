@@ -12,14 +12,15 @@ const { ensureDefaultUsers } = require('../utils/bootstrap');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
-const allowedOrigins = (
-  process.env.CLIENT_URLS ||
-  process.env.CLIENT_URL ||
-  'http://localhost:5173,https://txtilepros-frontend.vercel.app'
-)
+const defaultAllowedOrigins = [
+  'http://localhost:5173',
+  'https://txtilepros-frontend.vercel.app',
+];
+const envAllowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || '')
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
+const allowedOrigins = [...new Set([...defaultAllowedOrigins, ...envAllowedOrigins])];
 
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
 app.use(
