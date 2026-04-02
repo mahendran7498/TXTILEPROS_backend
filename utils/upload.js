@@ -2,7 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const uploadDir = path.join(__dirname, '..', 'uploads', 'reports');
+const uploadRoot = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, '..', 'uploads');
+const uploadDir = path.join(uploadRoot, 'reports');
 fs.mkdirSync(uploadDir, { recursive: true });
 
 const allowedMimeTypes = {

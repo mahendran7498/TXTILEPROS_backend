@@ -11,6 +11,7 @@ const { ensureDefaultUsers } = require('../utils/bootstrap');
 
 const app = express();
 const MONGO_URI = process.env.MONGO_URI;
+const uploadRoot = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, '..', 'uploads');
 
 const defaultAllowedOrigins = [
   'https://txtilepros-frontend.vercel.app',
@@ -98,7 +99,7 @@ app.use(
   })
 );
 
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+app.use('/uploads', express.static(uploadRoot));
 
 app.get('/api/health', (req, res) => {
   res.json({
