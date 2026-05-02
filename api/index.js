@@ -1,3 +1,6 @@
+const dns = require("dns");
+dns.setServers(["8.8.8.8"],["8.8.4.4"]);
+
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
@@ -14,6 +17,7 @@ const MONGO_URI = process.env.MONGO_URI;
 const uploadRoot = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, '..', 'uploads');
 
 const defaultAllowedOrigins = [
+  'http://localhost:5173',
   'https://txtilepros-frontend.vercel.app',
 ];
 
@@ -120,15 +124,12 @@ app.use((err, req, res, next) => {
 module.exports = async (req, res) => {
   const requestPath = String(req.url || '');
 
-  // Step 1: Always apply CORS headers immediately
   applyCorsHeaders(req, res);
 
-  // Step 2: Handle OPTIONS preflight before DB connection
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
 
-  // Step 3: Health check — no DB needed
   if (requestPath === '/api/health' || requestPath.startsWith('/api/health?')) {
     return res.status(200).json({
       status: 'ok',
@@ -138,7 +139,6 @@ module.exports = async (req, res) => {
     });
   }
 
-  // Step 4: Connect DB and handle request
   try {
     await connectAndBootstrap();
     registerRoutes();
@@ -150,3 +150,22 @@ module.exports = async (req, res) => {
     });
   }
 };
+
+// ✅ Local development server — only runs when executed directly (not on Vercel)
+if (require.main === module) {
+  const PORT = process.env.PORT || 5000;
+
+  connectAndBootstrap()
+    .then(() => {
+      registerRoutes();
+      app.listen(PORT, () => {
+        console.log(`🚀 Server running on http://localhost:${PORT}`);
+        console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`🛢  MongoDB connected`);
+      });
+    })
+    .catch((err) => {
+      console.error('❌ Failed to start server:', err.message);
+      process.exit(1);
+    });
+}
