@@ -2,6 +2,7 @@ const express = require('express');
 const WorkReport = require('../models/WorkReport');
 const { requireAuth } = require('../middleware/auth');
 const { formatWeekKey, startOfWeek, endOfWeek } = require('../utils/date');
+const { buildEmployeeAttendanceSummary } = require('../utils/attendance');
 const { storePhotos } = require('../utils/upload');
 const { syncReportToSheets } = require('../utils/sheets');
 
@@ -90,6 +91,7 @@ router.get('/weekly-summary', async (req, res, next) => {
       user: req.user._id,
       workDate: { $gte: weekStart, $lt: weekEnd },
     });
+    const attendance = await buildEmployeeAttendanceSummary(req.user._id, weekStart, weekEnd);
 
     const summary = reports.reduce(
       (acc, report) => {
@@ -107,6 +109,7 @@ router.get('/weekly-summary', async (req, res, next) => {
         photoCount: 0,
         problemReports: 0,
         attentionNeeded: 0,
+        attendance,
       }
     );
 

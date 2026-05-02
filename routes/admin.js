@@ -4,6 +4,7 @@ const WorkReport = require('../models/WorkReport');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { hashPassword } = require('../utils/auth');
 const { startOfWeek, endOfWeek } = require('../utils/date');
+const { buildWeeklyAttendance } = require('../utils/attendance');
 
 const router = express.Router();
 
@@ -122,7 +123,7 @@ router.get('/dashboard', async (req, res, next) => {
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
 
-    const [userCount, activeEmployees, reports, todaySubmissions] = await Promise.all([
+    const [userCount, activeEmployees, reports, todaySubmissions, attendance] = await Promise.all([
       User.countDocuments({ role: 'employee' }),
       User.countDocuments({ role: 'employee', active: true }),
       WorkReport.find({
@@ -134,6 +135,7 @@ router.get('/dashboard', async (req, res, next) => {
           $lt: new Date(new Date().setHours(23, 59, 59, 999)),
         },
       }),
+      buildWeeklyAttendance(weekStart),
     ]);
 
     const metrics = reports.reduce(
@@ -160,9 +162,25 @@ router.get('/dashboard', async (req, res, next) => {
         totalEmployees: userCount,
         activeEmployees,
         todaySubmissions,
+        todayPresent: attendance.today?.present || 0,
+        todayAbsent: attendance.today?.absent || 0,
+        attendanceRate: activeEmployees
+          ? Math.round((attendance.daily.reduce((sum, day) => sum + day.present, 0) / (activeEmployees * attendance.daily.length)) * 100)
+          : 0,
         ...metrics,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/attendance', async (req, res, next) => {
+  try {
+    const referenceDate = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
+    const weekStart = startOfWeek(referenceDate);
+    const attendance = await buildWeeklyAttendance(weekStart);
+    res.json({ attendance });
   } catch (error) {
     next(error);
   }

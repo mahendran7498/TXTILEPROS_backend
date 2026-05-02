@@ -14,12 +14,31 @@ function endOfWeek(inputDate = new Date()) {
   return end;
 }
 
+function startOfDay(inputDate = new Date()) {
+  const date = new Date(inputDate);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function addDays(inputDate, days) {
+  const date = new Date(inputDate);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function getDateKey(inputDate = new Date()) {
+  return startOfDay(inputDate).toISOString().slice(0, 10);
+}
+
 function formatWeekKey(inputDate = new Date()) {
   return startOfWeek(inputDate).toISOString().slice(0, 10);
 }
 
 module.exports = {
+  addDays,
+  getDateKey,
   startOfWeek,
   endOfWeek,
+  startOfDay,
   formatWeekKey,
 };
