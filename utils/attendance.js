@@ -87,9 +87,62 @@ async function buildWeeklyAttendance(referenceDate) {
   return {
     weekStart: getDateKey(weekStart),
     weekEnd: getDateKey(addDays(weekStart, 6)),
+    rangeLabel: 'week',
     totalEmployees: employees.length,
     today: daily.find((day) => day.date === todayKey) || null,
     daily,
+    employees: employeesAttendance,
+  };
+}
+
+async function buildMonthlyAttendance(referenceDate) {
+  const monthStart = new Date(referenceDate);
+  monthStart.setDate(1);
+  monthStart.setHours(0, 0, 0, 0);
+
+  const monthEnd = new Date(monthStart);
+  monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+  const totalDays = Math.max(Math.round((monthEnd - monthStart) / (24 * 60 * 60 * 1000)), 0);
+  const monthDates = Array.from({ length: totalDays }, (_, index) => {
+    const date = addDays(monthStart, index);
+    return {
+      date,
+      dateKey: getDateKey(date),
+      label: date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+    };
+  });
+
+  const { employees, attendanceByUser } = await getAttendanceSnapshot(monthStart, monthEnd);
+
+  const employeesAttendance = employees.map((employee) => {
+    const employeeId = String(employee._id);
+    const submittedDates = attendanceByUser.get(employeeId) || new Set();
+    const attendance = monthDates.map(({ dateKey, label }) => ({
+      date: dateKey,
+      label,
+      status: submittedDates.has(dateKey) ? 'present' : 'absent',
+    }));
+    const presentDays = attendance.filter((day) => day.status === 'present').length;
+
+    return {
+      id: employeeId,
+      name: employee.name,
+      email: employee.email,
+      employeeCode: employee.employeeCode,
+      department: employee.department,
+      presentDays,
+      absentDays: attendance.length - presentDays,
+      attendance,
+    };
+  });
+
+  return {
+    month: monthStart.toISOString().slice(0, 7),
+    monthLabel: monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    rangeLabel: 'month',
+    totalEmployees: employees.length,
+    totalDays,
     employees: employeesAttendance,
   };
 }
@@ -114,5 +167,6 @@ async function buildEmployeeAttendanceSummary(userId, rangeStart, rangeEnd) {
 
 module.exports = {
   buildWeeklyAttendance,
+  buildMonthlyAttendance,
   buildEmployeeAttendanceSummary,
 };

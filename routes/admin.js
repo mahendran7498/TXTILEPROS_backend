@@ -4,7 +4,7 @@ const WorkReport = require('../models/WorkReport');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { hashPassword } = require('../utils/auth');
 const { startOfWeek, endOfWeek } = require('../utils/date');
-const { buildWeeklyAttendance } = require('../utils/attendance');
+const { buildMonthlyAttendance, buildWeeklyAttendance } = require('../utils/attendance');
 
 const router = express.Router();
 
@@ -177,9 +177,9 @@ router.get('/dashboard', async (req, res, next) => {
 
 router.get('/attendance', async (req, res, next) => {
   try {
-    const referenceDate = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
-    const weekStart = startOfWeek(referenceDate);
-    const attendance = await buildWeeklyAttendance(weekStart);
+    const monthValue = String(req.query.month || '').trim();
+    const referenceDate = monthValue ? new Date(`${monthValue}-01T00:00:00`) : new Date();
+    const attendance = await buildMonthlyAttendance(referenceDate);
     res.json({ attendance });
   } catch (error) {
     next(error);
