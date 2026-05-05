@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const WorkReport = require('../models/WorkReport');
+const LeaveRequest = require('../models/LeaveRequest');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { hashPassword } = require('../utils/auth');
 const { startOfWeek, endOfWeek } = require('../utils/date');
@@ -123,7 +124,7 @@ router.get('/dashboard', async (req, res, next) => {
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
 
-    const [userCount, activeEmployees, reports, todaySubmissions, attendance] = await Promise.all([
+    const [userCount, activeEmployees, reports, todaySubmissions, attendance, pendingLeaves, approvedLeaves, rejectedLeaves] = await Promise.all([
       User.countDocuments({ role: 'employee' }),
       User.countDocuments({ role: 'employee', active: true }),
       WorkReport.find({
@@ -136,6 +137,9 @@ router.get('/dashboard', async (req, res, next) => {
         },
       }),
       buildWeeklyAttendance(weekStart),
+      LeaveRequest.countDocuments({ status: 'pending' }),
+      LeaveRequest.countDocuments({ status: 'approved' }),
+      LeaveRequest.countDocuments({ status: 'rejected' }),
     ]);
 
     const metrics = reports.reduce(
@@ -164,6 +168,9 @@ router.get('/dashboard', async (req, res, next) => {
         todaySubmissions,
         todayPresent: attendance.today?.present || 0,
         todayAbsent: attendance.today?.absent || 0,
+        pendingLeaves,
+        approvedLeaves,
+        rejectedLeaves,
         attendanceRate: activeEmployees
           ? Math.round((attendance.daily.reduce((sum, day) => sum + day.present, 0) / (activeEmployees * attendance.daily.length)) * 100)
           : 0,
@@ -181,6 +188,50 @@ router.get('/attendance', async (req, res, next) => {
     const referenceDate = monthValue ? new Date(`${monthValue}-01T00:00:00`) : new Date();
     const attendance = await buildMonthlyAttendance(referenceDate);
     res.json({ attendance });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/leaves', async (req, res, next) => {
+  try {
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+
+    const leaves = await LeaveRequest.find(filter)
+      .sort({ status: 1, leaveDate: -1, createdAt: -1 })
+      .populate('user', 'name email employeeCode department')
+      .populate('reviewedBy', 'name');
+
+    res.json({ leaves });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/leaves/:id', async (req, res, next) => {
+  try {
+    const leave = await LeaveRequest.findById(req.params.id);
+    if (!leave) {
+      return res.status(404).json({ error: 'Leave request not found.' });
+    }
+
+    const status = String(req.body.status || '').trim();
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Leave status must be approved or rejected.' });
+    }
+
+    leave.status = status;
+    leave.adminComment = String(req.body.adminComment || '').trim();
+    leave.reviewedAt = new Date();
+    leave.reviewedBy = req.user._id;
+    await leave.save();
+
+    const populated = await LeaveRequest.findById(leave._id)
+      .populate('user', 'name email employeeCode department')
+      .populate('reviewedBy', 'name');
+
+    res.json({ leave: populated });
   } catch (error) {
     next(error);
   }

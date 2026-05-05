@@ -47,6 +47,7 @@ function registerRoutes() {
   if (routesRegistered) return;
   app.use('/api/auth', require('../routes/auth'));
   app.use('/api/reports', require('../routes/reports'));
+  app.use('/api/leaves', require('../routes/leaves'));
   app.use('/api/admin', require('../routes/admin'));
   routesRegistered = true;
 }
