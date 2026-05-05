@@ -199,7 +199,7 @@ router.get('/leaves', async (req, res, next) => {
     if (req.query.status) filter.status = req.query.status;
 
     const leaves = await LeaveRequest.find(filter)
-      .sort({ status: 1, leaveDate: -1, createdAt: -1 })
+      .sort({ status: 1, fromDate: -1, createdAt: -1 })
       .populate('user', 'name email employeeCode department')
       .populate('reviewedBy', 'name');
 

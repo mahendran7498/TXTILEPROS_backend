@@ -8,11 +8,17 @@ router.use(requireAuth);
 
 router.post('/', async (req, res, next) => {
   try {
-    const leaveDate = req.body.leaveDate ? new Date(req.body.leaveDate) : null;
+    const legacyLeaveDate = req.body.leaveDate ? new Date(req.body.leaveDate) : null;
+    const fromDate = req.body.fromDate ? new Date(req.body.fromDate) : legacyLeaveDate;
+    const toDate = req.body.toDate ? new Date(req.body.toDate) : legacyLeaveDate;
     const reason = String(req.body.reason || '').trim();
 
-    if (!leaveDate || Number.isNaN(leaveDate.getTime())) {
-      return res.status(400).json({ error: 'Please provide a valid leave date.' });
+    if (!fromDate || Number.isNaN(fromDate.getTime()) || !toDate || Number.isNaN(toDate.getTime())) {
+      return res.status(400).json({ error: 'Please provide valid from and to dates.' });
+    }
+
+    if (fromDate > toDate) {
+      return res.status(400).json({ error: 'From date cannot be later than to date.' });
     }
 
     if (!reason) {
@@ -21,7 +27,8 @@ router.post('/', async (req, res, next) => {
 
     const leave = await LeaveRequest.create({
       user: req.user._id,
-      leaveDate,
+      fromDate,
+      toDate,
       reason,
     });
 
@@ -35,7 +42,7 @@ router.post('/', async (req, res, next) => {
 router.get('/mine', async (req, res, next) => {
   try {
     const leaves = await LeaveRequest.find({ user: req.user._id })
-      .sort({ leaveDate: -1, createdAt: -1 })
+      .sort({ fromDate: -1, createdAt: -1 })
       .populate('reviewedBy', 'name');
 
     res.json({ leaves });
