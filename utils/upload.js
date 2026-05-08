@@ -1,4 +1,5 @@
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const MAX_REPORT_PHOTO_SIZE_BYTES = 4 * 1024 * 1024;
 
 function storePhotos(uploads = []) {
   const safeUploads = Array.isArray(uploads) ? uploads.slice(0, 2) : [];
@@ -20,8 +21,8 @@ function storePhotos(uploads = []) {
     }
 
     const buffer = Buffer.from(match[2], 'base64');
-    if (buffer.length > 5 * 1024 * 1024) {
-      const error = new Error('Each photo must be smaller than 5MB.');
+    if (buffer.length > MAX_REPORT_PHOTO_SIZE_BYTES) {
+      const error = new Error('Each photo must be 4MB or smaller.');
       error.status = 400;
       throw error;
     }
