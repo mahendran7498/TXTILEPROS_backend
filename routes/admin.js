@@ -109,10 +109,26 @@ router.get('/reports', async (req, res, next) => {
     if (req.query.status) filter.status = req.query.status;
 
     const reports = await WorkReport.find(filter)
+      .select('user workDate siteName machineName shift hoursWorked status createdAt')
       .sort({ workDate: -1, createdAt: -1 })
       .populate('user', 'name email employeeCode department');
 
     res.json({ reports });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/reports/:id', async (req, res, next) => {
+  try {
+    const report = await WorkReport.findById(req.params.id)
+      .populate('user', 'name email employeeCode department');
+
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found.' });
+    }
+
+    res.json({ report });
   } catch (error) {
     next(error);
   }
@@ -129,7 +145,7 @@ router.get('/dashboard', async (req, res, next) => {
       User.countDocuments({ role: 'employee', active: true }),
       WorkReport.find({
         workDate: { $gte: weekStart, $lt: weekEnd },
-      }).populate('user', 'name email employeeCode department'),
+      }).select('hoursWorked status sheetsSync photos.kind'),
       WorkReport.countDocuments({
         createdAt: {
           $gte: new Date(new Date().setHours(0, 0, 0, 0)),
@@ -146,7 +162,7 @@ router.get('/dashboard', async (req, res, next) => {
       (acc, report) => {
         acc.totalReports += 1;
         acc.totalHours += report.hoursWorked || 0;
-        acc.photoCount += report.photos.length;
+        acc.photoCount += Array.isArray(report.photos) ? report.photos.length : 0;
         if (report.status === 'blocked' || report.status === 'needs-support') acc.attentionNeeded += 1;
         if (report.sheetsSync?.status === 'failed') acc.syncFailures += 1;
         return acc;
