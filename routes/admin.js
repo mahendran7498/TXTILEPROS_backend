@@ -4,7 +4,7 @@ const WorkReport = require('../models/WorkReport');
 const LeaveRequest = require('../models/LeaveRequest');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { hashPassword } = require('../utils/auth');
-const { startOfWeek, endOfWeek } = require('../utils/date');
+const { formatDateKey, parseDateInput, startOfWeek, endOfWeek } = require('../utils/date');
 const { buildMonthlyAttendance, buildWeeklyAttendance } = require('../utils/attendance');
 
 const router = express.Router();
@@ -98,7 +98,7 @@ router.patch('/users/:id', async (req, res, next) => {
 
 router.get('/reports', async (req, res, next) => {
   try {
-    const referenceDate = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
+    const referenceDate = req.query.weekStart ? parseDateInput(req.query.weekStart) : new Date();
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
     const filter = {
@@ -136,7 +136,7 @@ router.get('/reports/:id', async (req, res, next) => {
 
 router.get('/dashboard', async (req, res, next) => {
   try {
-    const referenceDate = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
+    const referenceDate = req.query.weekStart ? parseDateInput(req.query.weekStart) : new Date();
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
 
@@ -178,7 +178,7 @@ router.get('/dashboard', async (req, res, next) => {
 
     res.json({
       dashboard: {
-        weekStart: weekStart.toISOString().slice(0, 10),
+        weekStart: formatDateKey(weekStart),
         totalEmployees: userCount,
         activeEmployees,
         todaySubmissions,
@@ -201,7 +201,7 @@ router.get('/dashboard', async (req, res, next) => {
 router.get('/attendance', async (req, res, next) => {
   try {
     const monthValue = String(req.query.month || '').trim();
-    const referenceDate = monthValue ? new Date(`${monthValue}-01T00:00:00`) : new Date();
+    const referenceDate = monthValue ? parseDateInput(monthValue) : new Date();
     const attendance = await buildMonthlyAttendance(referenceDate);
     res.json({ attendance });
   } catch (error) {

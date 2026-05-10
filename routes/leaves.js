@@ -1,6 +1,7 @@
 const express = require('express');
 const LeaveRequest = require('../models/LeaveRequest');
 const { requireAuth } = require('../middleware/auth');
+const { parseDateInput } = require('../utils/date');
 
 const router = express.Router();
 
@@ -8,9 +9,9 @@ router.use(requireAuth);
 
 router.post('/', async (req, res, next) => {
   try {
-    const legacyLeaveDate = req.body.leaveDate ? new Date(req.body.leaveDate) : null;
-    const fromDate = req.body.fromDate ? new Date(req.body.fromDate) : legacyLeaveDate;
-    const toDate = req.body.toDate ? new Date(req.body.toDate) : legacyLeaveDate;
+    const legacyLeaveDate = req.body.leaveDate ? parseDateInput(req.body.leaveDate) : null;
+    const fromDate = req.body.fromDate ? parseDateInput(req.body.fromDate) : legacyLeaveDate;
+    const toDate = req.body.toDate ? parseDateInput(req.body.toDate) : legacyLeaveDate;
     const reason = String(req.body.reason || '').trim();
 
     if (!fromDate || Number.isNaN(fromDate.getTime()) || !toDate || Number.isNaN(toDate.getTime())) {

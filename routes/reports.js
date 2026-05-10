@@ -1,7 +1,7 @@
 const express = require('express');
 const WorkReport = require('../models/WorkReport');
 const { requireAuth } = require('../middleware/auth');
-const { formatWeekKey, startOfWeek, endOfWeek } = require('../utils/date');
+const { formatDateKey, formatWeekKey, parseDateInput, startOfWeek, endOfWeek } = require('../utils/date');
 const { buildEmployeeAttendanceSummary } = require('../utils/attendance');
 const { storePhotos } = require('../utils/upload');
 const { syncReportToSheets } = require('../utils/sheets');
@@ -12,7 +12,7 @@ router.use(requireAuth);
 
 router.post('/', async (req, res, next) => {
   try {
-    const workDate = req.body.workDate ? new Date(req.body.workDate) : new Date();
+    const workDate = req.body.workDate ? parseDateInput(req.body.workDate) : new Date();
     if (Number.isNaN(workDate.getTime())) {
       return res.status(400).json({ error: 'Please provide a valid work date.' });
     }
@@ -64,7 +64,7 @@ router.post('/', async (req, res, next) => {
 
 router.get('/mine', async (req, res, next) => {
   try {
-    const referenceDate = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
+    const referenceDate = req.query.weekStart ? parseDateInput(req.query.weekStart) : new Date();
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
 
@@ -83,7 +83,7 @@ router.get('/mine', async (req, res, next) => {
 
 router.get('/weekly-summary', async (req, res, next) => {
   try {
-    const referenceDate = req.query.weekStart ? new Date(req.query.weekStart) : new Date();
+    const referenceDate = req.query.weekStart ? parseDateInput(req.query.weekStart) : new Date();
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
 
@@ -103,7 +103,7 @@ router.get('/weekly-summary', async (req, res, next) => {
         return acc;
       },
       {
-        weekStart: weekStart.toISOString().slice(0, 10),
+        weekStart: formatDateKey(weekStart),
         totalReports: 0,
         totalHours: 0,
         photoCount: 0,

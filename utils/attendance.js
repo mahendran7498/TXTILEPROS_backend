@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const WorkReport = require('../models/WorkReport');
 const LeaveRequest = require('../models/LeaveRequest');
-const { addDays, getDateKey, startOfDay } = require('./date');
+const { addDays, formatMonthKey, getDateKey, startOfDay } = require('./date');
 
 function isHoliday(date) {
   // Sunday is a holiday (0 = Sunday)
@@ -208,7 +208,7 @@ async function buildMonthlyAttendance(referenceDate) {
   });
 
   return {
-    month: monthStart.toISOString().slice(0, 7),
+    month: formatMonthKey(monthStart),
     monthLabel: monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
     rangeLabel: 'month',
     totalEmployees: employees.length,
