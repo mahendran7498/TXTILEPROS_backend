@@ -68,7 +68,23 @@ router.post('/', async (req, res, next) => {
       },
     });
   } catch (error) {
-    next(error);
+    console.error('Leave request create failed:', {
+      message: error.message,
+      name: error.name,
+      stack: error.stack,
+      payload: {
+        userId: req.user?._id ? String(req.user._id) : null,
+        fromDate: req.body?.fromDate || null,
+        toDate: req.body?.toDate || null,
+        leaveDate: req.body?.leaveDate || null,
+        reasonLength: String(req.body?.reason || '').trim().length,
+      },
+    });
+
+    return res.status(error.status || 500).json({
+      error: error.message || 'Unable to submit leave request.',
+      details: error.name || 'LeaveRequestError',
+    });
   }
 });
 
