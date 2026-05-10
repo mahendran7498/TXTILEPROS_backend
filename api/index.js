@@ -18,6 +18,7 @@ const uploadRoot = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join
 
 const defaultAllowedOrigins = [
   'http://localhost:5173',
+  'http://localhost:5174',
   'https://txtilepros-frontend.vercel.app',
 ];
 

@@ -188,7 +188,7 @@ router.get('/dashboard', async (req, res, next) => {
         approvedLeaves,
         rejectedLeaves,
         attendanceRate: activeEmployees
-          ? Math.round((attendance.daily.reduce((sum, day) => sum + day.present, 0) / (activeEmployees * attendance.daily.length)) * 100)
+          ? Math.round((attendance.daily.reduce((sum, day) => sum + day.present, 0) / (activeEmployees * attendance.daily.filter(day => !day.holiday).length)) * 100)
           : 0,
         ...metrics,
       },

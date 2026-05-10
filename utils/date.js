@@ -2,6 +2,7 @@ function startOfWeek(inputDate = new Date()) {
   const date = new Date(inputDate);
   date.setHours(0, 0, 0, 0);
   const day = date.getDay();
+  // Week starts on Monday (day 1)
   const diff = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + diff);
   return date;
