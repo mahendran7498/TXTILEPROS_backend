@@ -15,10 +15,9 @@ const leaveRequestSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-leaveRequestSchema.pre('validate', function fillLegacyLeaveDates(next) {
+leaveRequestSchema.pre('validate', function fillLegacyLeaveDates() {
   if (!this.fromDate && this.leaveDate) this.fromDate = this.leaveDate;
   if (!this.toDate && this.leaveDate) this.toDate = this.leaveDate;
-  next();
 });
 
 module.exports = mongoose.model('LeaveRequest', leaveRequestSchema);
