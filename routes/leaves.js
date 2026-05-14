@@ -1,7 +1,9 @@
 const express = require('express');
 const LeaveRequest = require('../models/LeaveRequest');
+const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
 const { parseDateInput } = require('../utils/date');
+const { sendLeaveRequestNotification } = require('../utils/email');
 
 const router = express.Router();
 
@@ -45,27 +47,40 @@ router.post('/', async (req, res, next) => {
       reason,
     });
 
-    res.status(201).json({
-      leave: {
-        _id: String(leave._id),
-        user: {
-          _id: String(req.user._id),
-          name: req.user.name,
-          email: req.user.email,
-          employeeCode: req.user.employeeCode,
-          department: req.user.department,
-        },
-        fromDate: leave.fromDate,
-        toDate: leave.toDate,
-        leaveDate: leave.leaveDate,
-        reason: leave.reason,
-        status: leave.status,
-        adminComment: leave.adminComment,
-        reviewedAt: leave.reviewedAt,
-        reviewedBy: null,
-        createdAt: leave.createdAt,
-        updatedAt: leave.updatedAt,
+    const leaveResponse = {
+      _id: String(leave._id),
+      user: {
+        _id: String(req.user._id),
+        name: req.user.name,
+        email: req.user.email,
+        employeeCode: req.user.employeeCode,
+        department: req.user.department,
       },
+      fromDate: leave.fromDate,
+      toDate: leave.toDate,
+      leaveDate: leave.leaveDate,
+      reason: leave.reason,
+      status: leave.status,
+      adminComment: leave.adminComment,
+      reviewedAt: leave.reviewedAt,
+      reviewedBy: null,
+      createdAt: leave.createdAt,
+      updatedAt: leave.updatedAt,
+    };
+
+    User.find({ role: 'admin', active: true })
+      .select('email')
+      .lean()
+      .then((admins) => sendLeaveRequestNotification({
+        leave: leaveResponse,
+        adminRecipients: admins.map((admin) => admin.email),
+      }))
+      .catch((mailError) => {
+        console.error('Leave request notification failed:', mailError.message);
+      });
+
+    res.status(201).json({
+      leave: leaveResponse,
     });
   } catch (error) {
     console.error('Leave request create failed:', {

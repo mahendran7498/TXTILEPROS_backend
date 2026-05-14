@@ -6,6 +6,7 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { hashPassword } = require('../utils/auth');
 const { formatDateKey, parseDateInput, startOfWeek, endOfWeek } = require('../utils/date');
 const { buildMonthlyAttendance, buildWeeklyAttendance } = require('../utils/attendance');
+const { sendLeaveStatusNotification } = require('../utils/email');
 
 const router = express.Router();
 
@@ -246,6 +247,13 @@ router.patch('/leaves/:id', async (req, res, next) => {
     const populated = await LeaveRequest.findById(leave._id)
       .populate('user', 'name email employeeCode department')
       .populate('reviewedBy', 'name');
+
+    sendLeaveStatusNotification({
+      leave: populated,
+      employeeEmail: populated?.user?.email,
+    }).catch((mailError) => {
+      console.error('Leave status notification failed:', mailError.message);
+    });
 
     res.json({ leave: populated });
   } catch (error) {
