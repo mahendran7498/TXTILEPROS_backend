@@ -50,6 +50,7 @@ function registerRoutes() {
   app.use('/api/reports', require('../routes/reports'));
   app.use('/api/leaves', require('../routes/leaves'));
   app.use('/api/admin', require('../routes/admin'));
+  app.use('/api/archive', require('../routes/archive'));
   routesRegistered = true;
 }
 
