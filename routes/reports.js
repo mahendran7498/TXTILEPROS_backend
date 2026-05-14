@@ -16,7 +16,7 @@ router.post('/', async (req, res, next) => {
     if (Number.isNaN(workDate.getTime())) {
       return res.status(400).json({ error: 'Please provide a valid work date.' });
     }
-
+    
     const workSummary = String(req.body.workSummary || '').trim();
     const siteName = String(req.body.siteName || '').trim();
 

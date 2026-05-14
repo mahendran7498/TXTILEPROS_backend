@@ -65,30 +65,20 @@ async function findSpreadsheetByName(name, folderId) {
 }
 
 async function createSpreadsheet(name, folderId) {
-  const sheets = await getSheetsClient();
-  const resource = {
-    properties: { title: name },
-    sheets: [
-      {
-        properties: {
-          title: SHEET_NAME,
-        },
-      },
-    ],
-  };
-
-  if (folderId) {
-    resource.parents = [folderId];
-  }
-
-  const response = await sheets.spreadsheets.create({
-    requestBody: resource,
-    fields: 'spreadsheetId,spreadsheetUrl,properties.title',
+  const drive = await getDriveClient();
+  const response = await drive.files.create({
+    requestBody: {
+      name,
+      mimeType: 'application/vnd.google-apps.spreadsheet',
+      parents: folderId ? [folderId] : undefined,
+    },
+    fields: 'id, webViewLink',
+    supportsAllDrives: true,
   });
 
   return {
-    id: response.data.spreadsheetId,
-    url: response.data.spreadsheetUrl,
+    id: response.data.id,
+    url: response.data.webViewLink,
   };
 }
 
@@ -105,8 +95,10 @@ async function ensureFileShared(fileId) {
       supportsAllDrives: true,
     });
   } catch (error) {
-    // If the file is already shared publicly, this can safely fail.
-    if (!/alreadyExists|Duplicate|cannot.*grant/i.test(error.message)) {
+    // Some accounts/folders block public link sharing for service accounts.
+    // In that case we keep the file private to explicit collaborators and
+    // continue the archive flow instead of failing the whole job.
+    if (!/alreadyExists|Duplicate|cannot.*grant|does not have permission|insufficient.*permission|sharingDenied/i.test(error.message)) {
       throw error;
     }
   }

@@ -1,7 +1,6 @@
 const dns = require("dns");
 dns.setServers(["8.8.8.8"],["8.8.4.4"]);
 
-require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -9,6 +8,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const { ensureDefaultUsers } = require('../utils/bootstrap');
 
@@ -50,7 +50,8 @@ function registerRoutes() {
   app.use('/api/reports', require('../routes/reports'));
   app.use('/api/leaves', require('../routes/leaves'));
   app.use('/api/admin', require('../routes/admin'));
-  app.use('/api/archive', require('../routes/archive'));
+  // Archive route disabled for now to prevent manual or automated runs.
+  // app.use('/api/archive', require('../routes/archive'));
   routesRegistered = true;
 }
 

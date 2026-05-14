@@ -10,6 +10,9 @@ const {
 } = require('./google');
 const { sendArchiveNotification } = require('./email');
 
+const shouldSkipPhotoUploads = ['1', 'true', 'yes']
+  .includes(String(process.env.ARCHIVE_SKIP_PHOTO_UPLOADS || '').trim().toLowerCase());
+
 const ARCHIVE_HEADERS = [
   'Report ID',
   'Employee Name',
@@ -85,6 +88,7 @@ async function archiveMonthlyReports(monthQuery) {
     workDate: { $gte: monthStart, $lt: monthEnd },
   })
     .sort({ workDate: 1, createdAt: 1 })
+    .allowDiskUse(true)
     .populate('user', 'name email employeeCode department')
     .lean();
 
@@ -119,7 +123,7 @@ async function archiveMonthlyReports(monthQuery) {
       continue;
     }
 
-    const photoLinks = await uploadPhotosForReport(report);
+    const photoLinks = shouldSkipPhotoUploads ? [] : await uploadPhotosForReport(report);
     totalPhotos += photoLinks.length;
     const archivedReport = { ...report, photoLinks };
     rows.push(buildArchiveRow(archivedReport));

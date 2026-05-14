@@ -39,4 +39,8 @@ const workReportSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Supports month-range queries that sort reports chronologically during archiving
+// and report listing without forcing MongoDB into expensive in-memory sorts.
+workReportSchema.index({ workDate: 1, createdAt: 1 });
+
 module.exports = mongoose.model('WorkReport', workReportSchema);
