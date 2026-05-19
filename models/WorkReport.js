@@ -6,7 +6,9 @@ const photoSchema = new mongoose.Schema(
     originalName: String,
     mimeType: String,
     size: Number,
-    dataUrl: { type: String, required: true },
+    url: { type: String, required: true },
+    publicId: String,
+    dataUrl: String,
   },
   { _id: false }
 );

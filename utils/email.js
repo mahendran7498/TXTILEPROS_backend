@@ -48,6 +48,17 @@ function getLeavePeriodText(leave) {
   return `${from} to ${to}`;
 }
 
+function formatRemainingPaidLeaves(remainingPaidLeavesByYear = {}) {
+  const entries = Object.entries(remainingPaidLeavesByYear);
+  if (!entries.length) {
+    return '';
+  }
+
+  return entries
+    .map(([year, days]) => `${days} paid leave day(s) remaining for ${year}`)
+    .join(', ');
+}
+
 function getRecipients() {
   const recipients = process.env.ARCHIVE_NOTIFICATION_RECIPIENTS || process.env.NOTIFY_EMAIL || '';
   return parseRecipients(recipients);
@@ -129,7 +140,7 @@ async function sendLeaveRequestNotification({ leave, adminRecipients = [] }) {
   };
 }
 
-async function sendLeaveStatusNotification({ leave, employeeEmail }) {
+async function sendLeaveStatusNotification({ leave, employeeEmail, remainingPaidLeavesByYear = {} }) {
   const recipient = String(employeeEmail || leave.user?.email || '').trim().toLowerCase();
   if (!recipient) {
     return {
@@ -143,12 +154,15 @@ async function sendLeaveStatusNotification({ leave, employeeEmail }) {
   const statusLabel = leave.status === 'approved' ? 'Approved' : 'Rejected';
   const comment = String(leave.adminComment || '').trim();
   const reviewedBy = leave.reviewedBy?.name || 'Admin';
+  const remainingPaidLeaveText = formatRemainingPaidLeaves(remainingPaidLeavesByYear);
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.6;color:#222">
       <h2>Leave Request ${statusLabel}</h2>
       <p>Dear ${leave.user?.name || 'Employee'},</p>
       <p>Your leave request for <strong>${getLeavePeriodText(leave)}</strong> has been <strong>${statusLabel.toLowerCase()}</strong>.</p>
       <p><strong>Reason submitted:</strong> ${leave.reason || '-'}</p>
+      ${leave.status === 'approved' ? `<p><strong>Paid leave counted:</strong> ${leave.paidLeaveDays || 0} day(s)</p>` : ''}
+      ${leave.status === 'approved' && remainingPaidLeaveText ? `<p><strong>Remaining paid leaves:</strong> ${remainingPaidLeaveText}</p>` : ''}
       <p><strong>Reviewed by:</strong> ${reviewedBy}</p>
       ${comment ? `<p><strong>Admin comment:</strong> ${comment}</p>` : ''}
     </div>

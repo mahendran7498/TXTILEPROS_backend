@@ -212,6 +212,10 @@ function normalizeFileName(name) {
 }
 
 async function uploadPhotoToDrive(reportId, photo) {
+  if (photo?.url && !photo?.dataUrl) {
+    return photo.url;
+  }
+
   const drive = await getDriveClient();
   const { mimeType, base64 } = parseDataUrl(photo.dataUrl);
   const fileName = normalizeFileName(`${reportId}_${photo.kind}_${photo.originalName}`);

@@ -7,10 +7,35 @@ const { hashPassword } = require('../utils/auth');
 const { formatDateKey, parseDateInput, startOfWeek, endOfWeek } = require('../utils/date');
 const { buildMonthlyAttendance, buildWeeklyAttendance } = require('../utils/attendance');
 const { sendLeaveStatusNotification } = require('../utils/email');
+const {
+  MAX_PAID_LEAVE_DAYS_PER_YEAR,
+  buildPaidLeaveUsageByUser,
+  getPaidLeaveBreakdown,
+  getRemainingPaidLeavesForYear,
+} = require('../utils/leavePolicy');
 
 const router = express.Router();
 
 router.use(requireAuth, requireRole('admin'));
+
+function serializeLeave(leave, paidLeaveUsageByUser = new Map()) {
+  const leaveDoc = leave?.toObject ? leave.toObject() : leave;
+  const requestedPaidLeave = getPaidLeaveBreakdown(leaveDoc.fromDate, leaveDoc.toDate);
+  const userId = String(leaveDoc.user?._id || leaveDoc.user || '');
+  const year = leaveDoc.fromDate ? String(new Date(leaveDoc.fromDate).getFullYear()) : String(new Date().getFullYear());
+  const usedDays = paidLeaveUsageByUser.get(userId)?.[year] || 0;
+  const paidLeaveDays = leaveDoc.status === 'approved'
+    ? (leaveDoc.paidLeaveDays || requestedPaidLeave.totalDays)
+    : (leaveDoc.paidLeaveDays || 0);
+
+  return {
+    ...leaveDoc,
+    requestedPaidLeaveDays: requestedPaidLeave.totalDays,
+    paidLeaveDays,
+    paidLeaveLimit: MAX_PAID_LEAVE_DAYS_PER_YEAR,
+    remainingPaidLeaves: getRemainingPaidLeavesForYear(usedDays),
+  };
+}
 
 router.get('/users', async (req, res, next) => {
   try {
@@ -110,7 +135,7 @@ router.get('/reports', async (req, res, next) => {
     if (req.query.status) filter.status = req.query.status;
 
     const reports = await WorkReport.find(filter)
-      .select('user workDate siteName machineName shift hoursWorked status createdAt')
+      .select('user workDate siteName machineName clientName shift hoursWorked status workSummary problemsObserved materialsUsed createdAt')
       .sort({ workDate: -1, createdAt: -1 })
       .populate('user', 'name email employeeCode department');
 
@@ -215,12 +240,16 @@ router.get('/leaves', async (req, res, next) => {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
 
-    const leaves = await LeaveRequest.find(filter)
-      .sort({ status: 1, fromDate: -1, createdAt: -1 })
-      .populate('user', 'name email employeeCode department')
-      .populate('reviewedBy', 'name');
+    const [leaves, approvedLeaves] = await Promise.all([
+      LeaveRequest.find(filter)
+        .sort({ status: 1, fromDate: -1, createdAt: -1 })
+        .populate('user', 'name email employeeCode department')
+        .populate('reviewedBy', 'name'),
+      LeaveRequest.find({ status: 'approved' }).select('user fromDate toDate status'),
+    ]);
+    const paidLeaveUsageByUser = buildPaidLeaveUsageByUser(approvedLeaves);
 
-    res.json({ leaves });
+    res.json({ leaves: leaves.map((leave) => serializeLeave(leave, paidLeaveUsageByUser)) });
   } catch (error) {
     next(error);
   }
@@ -238,24 +267,65 @@ router.patch('/leaves/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'Leave status must be approved or rejected.' });
     }
 
+    const requestedPaidLeave = getPaidLeaveBreakdown(leave.fromDate, leave.toDate);
+
+    if (status === 'approved') {
+      const approvedLeaves = await LeaveRequest.find({
+        user: leave.user,
+        status: 'approved',
+        _id: { $ne: leave._id },
+      }).select('user fromDate toDate status');
+      const paidLeaveUsageByUser = buildPaidLeaveUsageByUser(approvedLeaves);
+      const currentUsage = paidLeaveUsageByUser.get(String(leave.user)) || {};
+
+      for (const [year, requestedDays] of Object.entries(requestedPaidLeave.byYear)) {
+        const usedDays = currentUsage[year] || 0;
+        const remainingDays = getRemainingPaidLeavesForYear(usedDays);
+
+        if (requestedDays > remainingDays) {
+          return res.status(400).json({
+            error: `Only ${remainingDays} paid leave day(s) remain for ${year}. This request needs ${requestedDays} working day(s).`,
+          });
+        }
+      }
+    }
+
     leave.status = status;
+    leave.paidLeaveDays = status === 'approved' ? requestedPaidLeave.totalDays : 0;
     leave.adminComment = String(req.body.adminComment || '').trim();
     leave.reviewedAt = new Date();
     leave.reviewedBy = req.user._id;
     await leave.save();
 
-    const populated = await LeaveRequest.findById(leave._id)
-      .populate('user', 'name email employeeCode department')
-      .populate('reviewedBy', 'name');
+    const [populated, approvedLeavesForUser] = await Promise.all([
+      LeaveRequest.findById(leave._id)
+        .populate('user', 'name email employeeCode department')
+        .populate('reviewedBy', 'name'),
+      LeaveRequest.find({
+        user: leave.user,
+        status: 'approved',
+      }).select('user fromDate toDate status'),
+    ]);
+    const approvedUsageByUser = buildPaidLeaveUsageByUser(approvedLeavesForUser);
+    const approvedUsage = approvedUsageByUser.get(String(leave.user)) || {};
+    const affectedYears = Object.keys(requestedPaidLeave.byYear).length
+      ? Object.keys(requestedPaidLeave.byYear)
+      : [String(new Date(leave.fromDate).getFullYear())];
+    const remainingPaidLeavesByYear = affectedYears.reduce((acc, year) => {
+      acc[year] = getRemainingPaidLeavesForYear(approvedUsage[year] || 0);
+      return acc;
+    }, {});
+    const serializedLeave = serializeLeave(populated, approvedUsageByUser);
 
     sendLeaveStatusNotification({
-      leave: populated,
+      leave: serializedLeave,
       employeeEmail: populated?.user?.email,
+      remainingPaidLeavesByYear,
     }).catch((mailError) => {
       console.error('Leave status notification failed:', mailError.message);
     });
 
-    res.json({ leave: populated });
+    res.json({ leave: serializedLeave });
   } catch (error) {
     next(error);
   }

@@ -25,7 +25,7 @@ router.post('/', async (req, res, next) => {
     }
 
     const incomingPhotos = Array.isArray(req.body.photos) ? req.body.photos : [];
-    const photos = storePhotos(incomingPhotos);
+    const photos = await storePhotos(incomingPhotos);
 
     if (photos.length !== 2) {
       return res.status(400).json({ error: 'Please upload exactly two photos: one before work and one after work.' });
