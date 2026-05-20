@@ -1,8 +1,9 @@
 const { v2: cloudinary } = require('cloudinary');
 
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const MAX_REPORT_PHOTO_SIZE_BYTES = 4 * 1024 * 1024;
+const MAX_REPORT_PHOTO_SIZE_BYTES = 3 * 1024 * 1024;
 const validKinds = new Set(['before', 'after']);
+const MAX_REPORT_UPLOAD_COUNT = 5;
 
 let cloudinaryConfigured = false;
 
@@ -95,7 +96,7 @@ async function uploadPhotoToCloudinary(photo) {
 }
 
 async function storePhotos(uploads = []) {
-  const safeUploads = Array.isArray(uploads) ? uploads.slice(0, 2) : [];
+  const safeUploads = Array.isArray(uploads) ? uploads.slice(0, MAX_REPORT_UPLOAD_COUNT) : [];
   const parsedUploads = safeUploads.map(parseUpload);
   return Promise.all(parsedUploads.map(uploadPhotoToCloudinary));
 }

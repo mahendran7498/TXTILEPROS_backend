@@ -27,13 +27,11 @@ router.post('/', async (req, res, next) => {
     const incomingPhotos = Array.isArray(req.body.photos) ? req.body.photos : [];
     const photos = await storePhotos(incomingPhotos);
 
-    if (photos.length !== 2) {
-      return res.status(400).json({ error: 'Please upload exactly two photos: one before work and one after work.' });
-    }
+    const beforePhotos = photos.filter((photo) => photo.kind === 'before');
+    const afterPhotos = photos.filter((photo) => photo.kind === 'after');
 
-    const photoKinds = new Set(photos.map((photo) => photo.kind));
-    if (!photoKinds.has('before') || !photoKinds.has('after')) {
-      return res.status(400).json({ error: 'Please upload one before-work photo and one after-work photo.' });
+    if (beforePhotos.length < 1 || beforePhotos.length > 4 || afterPhotos.length !== 1) {
+      return res.status(400).json({ error: 'Please upload 1 to 4 before-work photos and exactly 1 after-work photo.' });
     }
 
     const report = await WorkReport.create({
