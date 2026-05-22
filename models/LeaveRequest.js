@@ -22,16 +22,14 @@ leaveRequestSchema.pre('validate', function fillLegacyLeaveDates() {
   if (!this.toDate && this.leaveDate) this.toDate = this.leaveDate;
 });
 
-leaveRequestSchema.pre('validate', function preventPastLeaveSubmission(next) {
+leaveRequestSchema.pre('validate', function preventPastLeaveSubmission() {
   if (!this.fromDate || (!this.isNew && !this.isModified('fromDate'))) {
-    return next();
+    return;
   }
 
   if (startOfDay(this.fromDate) < startOfDay()) {
     this.invalidate('fromDate', 'Leave request cannot be submitted after the leave date has passed.');
   }
-
-  return next();
 });
 
 module.exports = mongoose.model('LeaveRequest', leaveRequestSchema);
