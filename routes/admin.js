@@ -66,7 +66,7 @@ router.post('/users', async (req, res, next) => {
       passwordHash: hashPassword(password),
       role: req.body.role === 'admin' ? 'admin' : 'employee',
       employeeCode: String(req.body.employeeCode || '').trim(),
-      department: String(req.body.department || 'Service').trim(),
+      department: String(req.body.department || (req.body.role === 'admin' ? 'Operations' : 'Service')).trim(),
       phone: String(req.body.phone || '').trim(),
       active: req.body.active !== false,
     });
@@ -100,7 +100,9 @@ router.patch('/users/:id', async (req, res, next) => {
     if (typeof req.body.employeeCode === 'string') user.employeeCode = req.body.employeeCode.trim();
     if (typeof req.body.phone === 'string') user.phone = req.body.phone.trim();
     if (typeof req.body.active === 'boolean') user.active = req.body.active;
-    if (req.body.role === 'admin' || req.body.role === 'employee') user.role = req.body.role;
+    if (req.body.role === 'admin' || req.body.role === 'employee') {
+      user.role = req.body.role;
+    }
     if (req.body.password) user.passwordHash = hashPassword(String(req.body.password));
 
     await user.save();
