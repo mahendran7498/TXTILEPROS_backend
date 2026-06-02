@@ -34,12 +34,21 @@ function getDepartmentKey(user) {
   return getDepartmentName(user).toLowerCase();
 }
 
+function buildModuleDepartmentQuery(user) {
+  return isSalesDepartment(user)
+    ? { $regex: 'sales', $options: 'i' }
+    : { $not: /sales/i };
+}
+
 function buildAccessibleUserQuery(user) {
   if (isOwner(user)) {
     return {};
   }
 
-  return { department: getDepartmentName(user) };
+  return {
+    role: { $ne: 'admin' },
+    department: buildModuleDepartmentQuery(user),
+  };
 }
 
 async function getAccessibleUserIds(user) {
@@ -60,7 +69,8 @@ function canManageTargetUser(actor, targetUser) {
     return false;
   }
 
-  return String(targetUser.department || '').trim().toLowerCase() === getDepartmentKey(actor);
+  const targetIsSales = /sales/i.test(String(targetUser.department || '').trim());
+  return targetIsSales === isSalesDepartment(actor);
 }
 
 function serializeLeave(leave, paidLeaveUsageByUser = new Map()) {
@@ -217,7 +227,7 @@ router.get('/reports/:id', requireServiceManagementAccess, async (req, res, next
       return res.status(404).json({ error: 'Report not found.' });
     }
 
-    if (!isOwner(req.user) && String(report.user?.department || '').trim().toLowerCase() !== getDepartmentKey(req.user)) {
+    if (!isOwner(req.user) && /sales/i.test(String(report.user?.department || '').trim()) !== isSalesDepartment(req.user)) {
       return res.status(403).json({ error: 'You do not have access to this report.' });
     }
 

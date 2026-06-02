@@ -61,7 +61,9 @@ function buildWeekDates(weekStart) {
 function buildEmployeeFilter(options = {}) {
   const filter = { role: 'employee', active: true };
   if (options.department) {
-    filter.department = options.department;
+    filter.department = String(options.department).trim().toLowerCase() === 'sales'
+      ? { $regex: 'sales', $options: 'i' }
+      : { $not: /sales/i };
   }
   return filter;
 }

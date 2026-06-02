@@ -2,6 +2,10 @@ function normalizeDepartment(department) {
   return String(department || '').trim().toLowerCase();
 }
 
+function departmentHasSales(department) {
+  return normalizeDepartment(department).includes('sales');
+}
+
 function isOwner(user) {
   return user?.role === 'admin';
 }
@@ -11,7 +15,7 @@ function isManager(user) {
 }
 
 function isSalesDepartment(user) {
-  return normalizeDepartment(user?.department) === 'sales';
+  return departmentHasSales(user?.department);
 }
 
 function isServiceUser(user) {
