@@ -32,6 +32,25 @@ function ensureCloudinaryConfigured() {
 }
 
 function parseUpload(upload) {
+  const kind = String(upload?.kind || '').toLowerCase();
+  if (!validKinds.has(kind)) {
+    const error = new Error('Each photo must be marked as before or after.');
+    error.status = 400;
+    throw error;
+  }
+
+  if (!upload?.dataUrl && upload?.url) {
+    return {
+      kind,
+      originalName: upload?.originalName || `${kind}.jpg`,
+      mimeType: upload?.mimeType || 'image/jpeg',
+      size: Number(upload?.size || 0),
+      url: String(upload.url),
+      publicId: upload?.publicId ? String(upload.publicId) : '',
+      existing: true,
+    };
+  }
+
   const match = String(upload?.dataUrl || '').match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/);
   if (!match) {
     const error = new Error('Photos must be JPEG, PNG, or WEBP files.');
@@ -42,13 +61,6 @@ function parseUpload(upload) {
   const mimeType = match[1];
   if (!allowedMimeTypes.has(mimeType)) {
     const error = new Error('Unsupported photo format.');
-    error.status = 400;
-    throw error;
-  }
-
-  const kind = String(upload?.kind || '').toLowerCase();
-  if (!validKinds.has(kind)) {
-    const error = new Error('Each photo must be marked as before or after.');
     error.status = 400;
     throw error;
   }
@@ -70,6 +82,17 @@ function parseUpload(upload) {
 }
 
 async function uploadPhotoToCloudinary(photo) {
+  if (photo.existing) {
+    return {
+      kind: photo.kind,
+      originalName: photo.originalName,
+      mimeType: photo.mimeType,
+      size: photo.size,
+      url: photo.url,
+      publicId: photo.publicId,
+    };
+  }
+
   ensureCloudinaryConfigured();
 
   try {

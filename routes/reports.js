@@ -7,8 +7,29 @@ const { storePhotos } = require('../utils/upload');
 const { syncReportToSheets } = require('../utils/sheets');
 
 const router = express.Router();
+const EDIT_WINDOW_MS = 60 * 60 * 1000;
 
 router.use(requireAuth);
+
+function canEditReport(report, userId) {
+  return String(report.user) === String(userId) && (Date.now() - new Date(report.createdAt).getTime()) <= EDIT_WINDOW_MS;
+}
+
+async function buildStoredPhotosFromRequest(body) {
+  const incomingPhotos = Array.isArray(body.photos) ? body.photos : [];
+  const photos = await storePhotos(incomingPhotos);
+
+  const beforePhotos = photos.filter((photo) => photo.kind === 'before');
+  const afterPhotos = photos.filter((photo) => photo.kind === 'after');
+
+  if (beforePhotos.length < 1 || beforePhotos.length > 4 || afterPhotos.length !== 1) {
+    const error = new Error('Please upload 1 to 4 before-work photos and exactly 1 after-work photo.');
+    error.status = 400;
+    throw error;
+  }
+
+  return photos;
+}
 
 router.post('/', async (req, res, next) => {
   try {
@@ -24,15 +45,7 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Site name and work summary are required.' });
     }
 
-    const incomingPhotos = Array.isArray(req.body.photos) ? req.body.photos : [];
-    const photos = await storePhotos(incomingPhotos);
-
-    const beforePhotos = photos.filter((photo) => photo.kind === 'before');
-    const afterPhotos = photos.filter((photo) => photo.kind === 'after');
-
-    if (beforePhotos.length < 1 || beforePhotos.length > 4 || afterPhotos.length !== 1) {
-      return res.status(400).json({ error: 'Please upload 1 to 4 before-work photos and exactly 1 after-work photo.' });
-    }
+    const photos = await buildStoredPhotosFromRequest(req.body);
 
     const report = await WorkReport.create({
       user: req.user._id,
@@ -55,6 +68,54 @@ router.post('/', async (req, res, next) => {
 
     const populated = await WorkReport.findById(report._id).populate('user', 'name email employeeCode department');
     res.status(201).json({ report: populated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const report = await WorkReport.findById(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found.' });
+    }
+
+    if (!canEditReport(report, req.user._id)) {
+      return res.status(403).json({ error: 'This report can only be edited by its owner within 1 hour of submission.' });
+    }
+
+    const workDate = req.body.workDate ? parseDateInput(req.body.workDate) : report.workDate;
+    if (Number.isNaN(workDate.getTime())) {
+      return res.status(400).json({ error: 'Please provide a valid work date.' });
+    }
+
+    const workSummary = String(req.body.workSummary || '').trim();
+    const siteName = String(req.body.siteName || '').trim();
+
+    if (!siteName || !workSummary) {
+      return res.status(400).json({ error: 'Site name and work summary are required.' });
+    }
+
+    const photos = await buildStoredPhotosFromRequest(req.body);
+
+    report.workDate = workDate;
+    report.weekKey = formatWeekKey(workDate);
+    report.siteName = siteName;
+    report.clientName = String(req.body.clientName || '').trim();
+    report.machineName = String(req.body.machineName || '').trim();
+    report.shift = req.body.shift || 'General';
+    report.hoursWorked = Number(req.body.hoursWorked || 8);
+    report.workSummary = workSummary;
+    report.problemsObserved = String(req.body.problemsObserved || '').trim();
+    report.materialsUsed = String(req.body.materialsUsed || '').trim();
+    report.status = req.body.status || 'completed';
+    report.photos = photos;
+
+    report.sheetsSync = await syncReportToSheets(report, req.user);
+    await report.save();
+
+    const populated = await WorkReport.findById(report._id).populate('user', 'name email employeeCode department');
+    res.json({ report: populated });
   } catch (error) {
     next(error);
   }
