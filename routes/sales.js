@@ -1,7 +1,7 @@
 const express = require('express');
 const SalesOrder = require('../models/SalesOrder');
 const { requireAuth } = require('../middleware/auth');
-const { isSalesUser, requireSalesModuleAccess, requireOwner } = require('../middleware/access');
+const { isSalesManager, isSalesUser, requireSalesManagementAccess, requireSalesModuleAccess } = require('../middleware/access');
 const { storeCompanyIdPhoto } = require('../utils/salesUpload');
 
 const router = express.Router();
@@ -10,7 +10,7 @@ router.use(requireAuth, requireSalesModuleAccess);
 
 router.get('/dashboard', async (req, res, next) => {
   try {
-    const filter = req.user.role === 'admin' ? {} : { created_by: req.user.email };
+    const filter = isSalesManager(req.user) || req.user.role === 'admin' ? {} : { created_by: req.user.email };
     const [totalOrders, pendingOrders, recentOrders] = await Promise.all([
       SalesOrder.countDocuments(filter),
       SalesOrder.countDocuments({ ...filter, order_status: 'Pending' }),
@@ -76,7 +76,7 @@ router.get('/orders/mine', async (req, res, next) => {
   }
 });
 
-router.get('/orders/all', requireOwner, async (req, res, next) => {
+router.get('/orders/all', requireSalesManagementAccess, async (req, res, next) => {
   try {
     const orders = await SalesOrder.find({}).sort({ created_at: -1, _id: -1 });
     res.json({ orders });
