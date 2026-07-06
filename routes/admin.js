@@ -3,7 +3,6 @@ const User = require('../models/User');
 const WorkReport = require('../models/WorkReport');
 const LeaveRequest = require('../models/LeaveRequest');
 const { requireAnyRole, requireAuth } = require('../middleware/auth');
-const { requireAuth } = require('../middleware/auth');
 const { isOwner, isSalesDepartment, requireServiceManagementAccess } = require('../middleware/access');
 const { hashPassword } = require('../utils/auth');
 const { formatDateKey, parseDateInput, startOfWeek, endOfWeek } = require('../utils/date');
