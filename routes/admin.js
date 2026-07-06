@@ -2,7 +2,7 @@ const express = require('express');
 const User = require('../models/User');
 const WorkReport = require('../models/WorkReport');
 const LeaveRequest = require('../models/LeaveRequest');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAnyRole, requireAuth } = require('../middleware/auth');
 const { hashPassword } = require('../utils/auth');
 const { formatDateKey, parseDateInput, startOfWeek, endOfWeek } = require('../utils/date');
 const { buildMonthlyAttendance, buildWeeklyAttendance } = require('../utils/attendance');
@@ -16,7 +16,7 @@ const {
 
 const router = express.Router();
 
-router.use(requireAuth, requireRole('admin'));
+router.use(requireAuth, requireAnyRole(['owner', 'admin']));
 
 function serializeLeave(leave, paidLeaveUsageByUser = new Map()) {
   const leaveDoc = leave?.toObject ? leave.toObject() : leave;
@@ -64,7 +64,7 @@ router.post('/users', async (req, res, next) => {
       name: String(req.body.name).trim(),
       email,
       passwordHash: hashPassword(password),
-      role: req.body.role === 'admin' ? 'admin' : 'employee',
+      role: ['owner', 'admin'].includes(req.body.role) ? req.body.role : 'employee',
       employeeCode: String(req.body.employeeCode || '').trim(),
       department: String(req.body.department || 'Service').trim(),
       phone: String(req.body.phone || '').trim(),
@@ -100,7 +100,7 @@ router.patch('/users/:id', async (req, res, next) => {
     if (typeof req.body.employeeCode === 'string') user.employeeCode = req.body.employeeCode.trim();
     if (typeof req.body.phone === 'string') user.phone = req.body.phone.trim();
     if (typeof req.body.active === 'boolean') user.active = req.body.active;
-    if (req.body.role === 'admin' || req.body.role === 'employee') user.role = req.body.role;
+    if (['owner', 'admin', 'employee'].includes(req.body.role)) user.role = req.body.role;
     if (req.body.password) user.passwordHash = hashPassword(String(req.body.password));
 
     await user.save();

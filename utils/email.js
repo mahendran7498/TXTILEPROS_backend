@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { getPayslipFilename } = require('./payslipPdf');
 
 const smtpUser = process.env.SMTP_USER;
 const smtpPass = process.env.SMTP_PASS;
@@ -181,8 +182,54 @@ async function sendLeaveStatusNotification({ leave, employeeEmail, remainingPaid
   };
 }
 
+async function sendPayslipEmail({ salaryRecord, pdfBuffer }) {
+  const employee = salaryRecord.employee || {};
+  const recipient = String(employee.email || '').trim().toLowerCase();
+  if (!recipient) {
+    return {
+      status: 'skipped',
+      message: 'No employee email available for payslip delivery.',
+    };
+  }
+
+  assertSmtpConfigured();
+
+  const monthLabel = new Date(salaryRecord.year, salaryRecord.month - 1, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  await transporter.sendMail({
+    from: `TXTILEPROS Payroll <${smtpUser}>`,
+    to: recipient,
+    subject: `Your TXTILEPROS payslip for ${monthLabel}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#222">
+        <h2>Salary Payslip</h2>
+        <p>Dear ${employee.name || 'Employee'},</p>
+        <p>Your payslip for <strong>${monthLabel}</strong> is attached.</p>
+        <p><strong>Net salary:</strong> ${salaryRecord.netSalary || 0}</p>
+        ${salaryRecord.remarks ? `<p><strong>Remarks:</strong> ${salaryRecord.remarks}</p>` : ''}
+      </div>
+    `,
+    attachments: [
+      {
+        filename: getPayslipFilename(salaryRecord),
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      },
+    ],
+  });
+
+  return {
+    status: 'sent',
+    recipients: [recipient],
+  };
+}
+
 module.exports = {
   sendArchiveNotification,
   sendLeaveRequestNotification,
   sendLeaveStatusNotification,
+  sendPayslipEmail,
 };

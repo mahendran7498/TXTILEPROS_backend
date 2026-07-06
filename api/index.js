@@ -49,6 +49,7 @@ function registerRoutes() {
   app.use('/api/auth', require('../routes/auth'));
   app.use('/api/reports', require('../routes/reports'));
   app.use('/api/leaves', require('../routes/leaves'));
+  app.use('/api/salaries', require('../routes/salaries'));
   app.use('/api/admin', require('../routes/admin'));
   // Archive route disabled for now to prevent manual or automated runs.
   // app.use('/api/archive', require('../routes/archive'));
