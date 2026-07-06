@@ -58,9 +58,19 @@ function buildWeekDates(weekStart) {
   });
 }
 
-async function getAttendanceSnapshot(rangeStart, rangeEnd) {
+function buildEmployeeFilter(options = {}) {
+  const filter = { role: 'employee', active: true };
+  if (options.department) {
+    filter.department = String(options.department).trim().toLowerCase() === 'sales'
+      ? { $regex: 'sales', $options: 'i' }
+      : { $not: /sales/i };
+  }
+  return filter;
+}
+
+async function getAttendanceSnapshot(rangeStart, rangeEnd, options = {}) {
   const [employees, reports, leaves] = await Promise.all([
-    User.find({ role: 'employee', active: true }).select('name email employeeCode department'),
+    User.find(buildEmployeeFilter(options)).select('name email employeeCode department'),
     WorkReport.find({
       workDate: { $gte: rangeStart, $lt: rangeEnd },
     }).select('user workDate'),
@@ -105,11 +115,11 @@ async function getAttendanceSnapshot(rangeStart, rangeEnd) {
   return { employees, attendanceByUser, leavesByUser };
 }
 
-async function buildWeeklyAttendance(referenceDate) {
+async function buildWeeklyAttendance(referenceDate, options = {}) {
   const weekStart = startOfDay(referenceDate);
   const weekEnd = addDays(weekStart, 7);
   const weekDates = buildWeekDates(weekStart);
-  const { employees, attendanceByUser, leavesByUser } = await getAttendanceSnapshot(weekStart, weekEnd);
+  const { employees, attendanceByUser, leavesByUser } = await getAttendanceSnapshot(weekStart, weekEnd, options);
 
   const daily = weekDates.map(({ dateKey, label, date }) => {
     const holidayInfo = getHolidayInfo(date);
@@ -193,7 +203,7 @@ async function buildWeeklyAttendance(referenceDate) {
   };
 }
 
-async function buildMonthlyAttendance(referenceDate) {
+async function buildMonthlyAttendance(referenceDate, options = {}) {
   const monthStart = new Date(referenceDate);
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
@@ -215,7 +225,7 @@ async function buildMonthlyAttendance(referenceDate) {
   const yearEnd = new Date(monthStart.getFullYear() + 1, 0, 1);
 
   const [{ employees, attendanceByUser, leavesByUser }, approvedYearLeaves] = await Promise.all([
-    getAttendanceSnapshot(monthStart, monthEnd),
+    getAttendanceSnapshot(monthStart, monthEnd, options),
     LeaveRequest.find({
       status: 'approved',
       $or: [

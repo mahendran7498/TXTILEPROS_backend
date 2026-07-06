@@ -11,10 +11,13 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const { ensureDefaultUsers } = require('../utils/bootstrap');
+const { requireAuth } = require('../middleware/auth');
+const { requireServiceModuleAccess } = require('../middleware/access');
 
 const app = express();
 const MONGO_URI = process.env.MONGO_URI;
 const uploadRoot = process.env.VERCEL ? path.join('/tmp', 'uploads') : path.join(__dirname, '..', 'uploads');
+const staticUploadRoot = path.join(__dirname, '..', 'static', 'uploads');
 
 const defaultAllowedOrigins = [
   'http://localhost:5173',
@@ -50,7 +53,10 @@ function registerRoutes() {
   app.use('/api/reports', require('../routes/reports'));
   app.use('/api/leaves', require('../routes/leaves'));
   app.use('/api/salaries', require('../routes/salaries'));
+  app.use('/api/reports', requireAuth, requireServiceModuleAccess, require('../routes/reports'));
+  app.use('/api/leaves', requireAuth, requireServiceModuleAccess, require('../routes/leaves'));
   app.use('/api/admin', require('../routes/admin'));
+  app.use('/api/sales', require('../routes/sales'));
   // Archive route disabled for now to prevent manual or automated runs.
   // app.use('/api/archive', require('../routes/archive'));
   routesRegistered = true;
@@ -109,6 +115,7 @@ app.use(
 );
 
 app.use('/uploads', express.static(uploadRoot));
+app.use('/static/uploads', express.static(staticUploadRoot));
 
 app.get('/api/health', (req, res) => {
   res.json({

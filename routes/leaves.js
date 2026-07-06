@@ -82,7 +82,13 @@ router.post('/', async (req, res, next) => {
       updatedAt: leave.updatedAt,
     };
 
-    User.find({ role: 'admin', active: true })
+    User.find({
+      active: true,
+      $or: [
+        { role: 'admin' },
+        { role: 'manager', department: 'Service' },
+      ],
+    })
       .select('email')
       .lean()
       .then((admins) => sendLeaveRequestNotification({

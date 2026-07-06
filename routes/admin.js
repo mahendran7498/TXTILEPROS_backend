@@ -3,6 +3,8 @@ const User = require('../models/User');
 const WorkReport = require('../models/WorkReport');
 const LeaveRequest = require('../models/LeaveRequest');
 const { requireAnyRole, requireAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
+const { isOwner, isSalesDepartment, requireServiceManagementAccess } = require('../middleware/access');
 const { hashPassword } = require('../utils/auth');
 const { formatDateKey, parseDateInput, startOfWeek, endOfWeek } = require('../utils/date');
 const { buildMonthlyAttendance, buildWeeklyAttendance } = require('../utils/attendance');
@@ -17,6 +19,61 @@ const {
 const router = express.Router();
 
 router.use(requireAuth, requireAnyRole(['owner', 'admin']));
+router.use(requireAuth);
+
+function requireManagementAccess(req, res, next) {
+  if (isOwner(req.user) || req.user?.role === 'manager') {
+    return next();
+  }
+  return res.status(403).json({ error: 'Access Denied' });
+}
+
+function getDepartmentName(user) {
+  return isSalesDepartment(user) ? 'Sales' : 'Service';
+}
+
+function getDepartmentKey(user) {
+  return getDepartmentName(user).toLowerCase();
+}
+
+function buildModuleDepartmentQuery(user) {
+  return isSalesDepartment(user)
+    ? { $regex: 'sales', $options: 'i' }
+    : { $not: /sales/i };
+}
+
+function buildAccessibleUserQuery(user) {
+  if (isOwner(user)) {
+    return {};
+  }
+
+  return {
+    role: { $ne: 'admin' },
+    department: buildModuleDepartmentQuery(user),
+  };
+}
+
+async function getAccessibleUserIds(user) {
+  const accessibleUsers = await User.find(buildAccessibleUserQuery(user)).select('_id');
+  return accessibleUsers.map((candidate) => candidate._id);
+}
+
+function normalizeRole(role) {
+  return role === 'manager' ? 'manager' : 'employee';
+}
+
+function canManageTargetUser(actor, targetUser) {
+  if (isOwner(actor)) {
+    return true;
+  }
+
+  if (!targetUser || targetUser.role === 'admin') {
+    return false;
+  }
+
+  const targetIsSales = /sales/i.test(String(targetUser.department || '').trim());
+  return targetIsSales === isSalesDepartment(actor);
+}
 
 function serializeLeave(leave, paidLeaveUsageByUser = new Map()) {
   const leaveDoc = leave?.toObject ? leave.toObject() : leave;
@@ -37,16 +94,16 @@ function serializeLeave(leave, paidLeaveUsageByUser = new Map()) {
   };
 }
 
-router.get('/users', async (req, res, next) => {
+router.get('/users', requireManagementAccess, async (req, res, next) => {
   try {
-    const users = await User.find().select('-passwordHash').sort({ role: 1, name: 1 });
+    const users = await User.find(buildAccessibleUserQuery(req.user)).select('-passwordHash').sort({ role: 1, name: 1 });
     res.json({ users });
   } catch (error) {
     next(error);
   }
 });
 
-router.post('/users', async (req, res, next) => {
+router.post('/users', requireManagementAccess, async (req, res, next) => {
   try {
     const email = String(req.body.email || '').trim().toLowerCase();
     const password = String(req.body.password || '');
@@ -60,13 +117,18 @@ router.post('/users', async (req, res, next) => {
       return res.status(409).json({ error: 'A user with that email already exists.' });
     }
 
+    const department = isOwner(req.user)
+      ? String(req.body.department || 'Service').trim() || 'Service'
+      : getDepartmentName(req.user);
+
     const user = await User.create({
       name: String(req.body.name).trim(),
       email,
       passwordHash: hashPassword(password),
       role: ['owner', 'admin'].includes(req.body.role) ? req.body.role : 'employee',
+      role: normalizeRole(req.body.role),
       employeeCode: String(req.body.employeeCode || '').trim(),
-      department: String(req.body.department || 'Service').trim(),
+      department,
       phone: String(req.body.phone || '').trim(),
       active: req.body.active !== false,
     });
@@ -88,19 +150,26 @@ router.post('/users', async (req, res, next) => {
   }
 });
 
-router.patch('/users/:id', async (req, res, next) => {
+router.patch('/users/:id', requireManagementAccess, async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
+    if (!canManageTargetUser(req.user, user)) {
+      return res.status(403).json({ error: 'You do not have access to this user.' });
+    }
+
     if (typeof req.body.name === 'string') user.name = req.body.name.trim();
-    if (typeof req.body.department === 'string') user.department = req.body.department.trim();
+    if (typeof req.body.department === 'string' && isOwner(req.user)) user.department = req.body.department.trim();
     if (typeof req.body.employeeCode === 'string') user.employeeCode = req.body.employeeCode.trim();
     if (typeof req.body.phone === 'string') user.phone = req.body.phone.trim();
     if (typeof req.body.active === 'boolean') user.active = req.body.active;
     if (['owner', 'admin', 'employee'].includes(req.body.role)) user.role = req.body.role;
+    if (req.body.role === 'manager' || req.body.role === 'employee') {
+      user.role = req.body.role;
+    }
     if (req.body.password) user.passwordHash = hashPassword(String(req.body.password));
 
     await user.save();
@@ -122,16 +191,24 @@ router.patch('/users/:id', async (req, res, next) => {
   }
 });
 
-router.get('/reports', async (req, res, next) => {
+router.get('/reports', requireServiceManagementAccess, async (req, res, next) => {
   try {
     const referenceDate = req.query.weekStart ? parseDateInput(req.query.weekStart) : new Date();
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
+    const accessibleUserIds = await getAccessibleUserIds(req.user);
     const filter = {
       workDate: { $gte: weekStart, $lt: weekEnd },
+      user: req.query.employeeId || { $in: accessibleUserIds },
     };
 
-    if (req.query.employeeId) filter.user = req.query.employeeId;
+    if (!isOwner(req.user) && req.query.employeeId) {
+      const requestedUser = await User.findById(req.query.employeeId).select('department role');
+      if (!canManageTargetUser(req.user, requestedUser)) {
+        return res.status(403).json({ error: 'You do not have access to this employee.' });
+      }
+    }
+
     if (req.query.status) filter.status = req.query.status;
 
     const reports = await WorkReport.find(filter)
@@ -145,7 +222,7 @@ router.get('/reports', async (req, res, next) => {
   }
 });
 
-router.get('/reports/:id', async (req, res, next) => {
+router.get('/reports/:id', requireServiceManagementAccess, async (req, res, next) => {
   try {
     const report = await WorkReport.findById(req.params.id)
       .populate('user', 'name email employeeCode department');
@@ -154,36 +231,52 @@ router.get('/reports/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Report not found.' });
     }
 
+    if (!isOwner(req.user) && /sales/i.test(String(report.user?.department || '').trim()) !== isSalesDepartment(req.user)) {
+      return res.status(403).json({ error: 'You do not have access to this report.' });
+    }
+
     res.json({ report });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/dashboard', async (req, res, next) => {
+router.get('/dashboard', requireServiceManagementAccess, async (req, res, next) => {
   try {
     const referenceDate = req.query.weekStart ? parseDateInput(req.query.weekStart) : new Date();
     const weekStart = startOfWeek(referenceDate);
     const weekEnd = endOfWeek(referenceDate);
+    const employeeFilter = {
+      ...buildAccessibleUserQuery(req.user),
+      role: 'employee',
+    };
+    const accessibleUserIds = await getAccessibleUserIds(req.user);
+    const reportFilter = {
+      workDate: { $gte: weekStart, $lt: weekEnd },
+      user: { $in: accessibleUserIds },
+    };
+    const todayFilter = {
+      createdAt: {
+        $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+        $lt: new Date(new Date().setHours(23, 59, 59, 999)),
+      },
+      user: { $in: accessibleUserIds },
+    };
+    const leaveFilter = { user: { $in: accessibleUserIds } };
 
     const [userCount, activeEmployees, reports, todaySubmissions, attendance, pendingLeaves, approvedLeaves, rejectedLeaves] = await Promise.all([
-      User.countDocuments({ role: 'employee' }),
-      User.countDocuments({ role: 'employee', active: true }),
-      WorkReport.find({
-        workDate: { $gte: weekStart, $lt: weekEnd },
-      }).select('hoursWorked status sheetsSync photos.kind'),
-      WorkReport.countDocuments({
-        createdAt: {
-          $gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          $lt: new Date(new Date().setHours(23, 59, 59, 999)),
-        },
-      }),
-      buildWeeklyAttendance(weekStart),
-      LeaveRequest.countDocuments({ status: 'pending' }),
-      LeaveRequest.countDocuments({ status: 'approved' }),
-      LeaveRequest.countDocuments({ status: 'rejected' }),
+      User.countDocuments(employeeFilter),
+      User.countDocuments({ ...employeeFilter, active: true }),
+      WorkReport.find(reportFilter).select('hoursWorked status sheetsSync photos.kind'),
+      WorkReport.countDocuments(todayFilter),
+      buildWeeklyAttendance(weekStart, { department: isOwner(req.user) ? '' : getDepartmentName(req.user) }),
+      LeaveRequest.countDocuments({ ...leaveFilter, status: 'pending' }),
+      LeaveRequest.countDocuments({ ...leaveFilter, status: 'approved' }),
+      LeaveRequest.countDocuments({ ...leaveFilter, status: 'rejected' }),
     ]);
 
+    const workingDays = attendance.daily.filter((day) => !day.holiday).length;
+    const attendanceRateBase = activeEmployees * workingDays;
     const metrics = reports.reduce(
       (acc, report) => {
         acc.totalReports += 1;
@@ -213,8 +306,8 @@ router.get('/dashboard', async (req, res, next) => {
         pendingLeaves,
         approvedLeaves,
         rejectedLeaves,
-        attendanceRate: activeEmployees
-          ? Math.round((attendance.daily.reduce((sum, day) => sum + day.present, 0) / (activeEmployees * attendance.daily.filter(day => !day.holiday).length)) * 100)
+        attendanceRate: attendanceRateBase
+          ? Math.round((attendance.daily.reduce((sum, day) => sum + day.present, 0) / attendanceRateBase) * 100)
           : 0,
         ...metrics,
       },
@@ -224,28 +317,33 @@ router.get('/dashboard', async (req, res, next) => {
   }
 });
 
-router.get('/attendance', async (req, res, next) => {
+router.get('/attendance', requireServiceManagementAccess, async (req, res, next) => {
   try {
     const monthValue = String(req.query.month || '').trim();
     const referenceDate = monthValue ? parseDateInput(monthValue) : new Date();
-    const attendance = await buildMonthlyAttendance(referenceDate);
+    const attendance = await buildMonthlyAttendance(referenceDate, { department: isOwner(req.user) ? '' : getDepartmentName(req.user) });
     res.json({ attendance });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/leaves', async (req, res, next) => {
+router.get('/leaves', requireServiceManagementAccess, async (req, res, next) => {
   try {
     const filter = {};
     if (req.query.status) filter.status = req.query.status;
+
+    if (!isOwner(req.user)) {
+      const accessibleUserIds = await getAccessibleUserIds(req.user);
+      filter.user = { $in: accessibleUserIds };
+    }
 
     const [leaves, approvedLeaves] = await Promise.all([
       LeaveRequest.find(filter)
         .sort({ status: 1, fromDate: -1, createdAt: -1 })
         .populate('user', 'name email employeeCode department')
         .populate('reviewedBy', 'name'),
-      LeaveRequest.find({ status: 'approved' }).select('user fromDate toDate status'),
+      LeaveRequest.find({ ...filter, status: 'approved' }).select('user fromDate toDate status'),
     ]);
     const paidLeaveUsageByUser = buildPaidLeaveUsageByUser(approvedLeaves);
 
@@ -255,11 +353,18 @@ router.get('/leaves', async (req, res, next) => {
   }
 });
 
-router.patch('/leaves/:id', async (req, res, next) => {
+router.patch('/leaves/:id', requireServiceManagementAccess, async (req, res, next) => {
   try {
     const leave = await LeaveRequest.findById(req.params.id);
     if (!leave) {
       return res.status(404).json({ error: 'Leave request not found.' });
+    }
+
+    if (!isOwner(req.user)) {
+      const leaveUser = await User.findById(leave.user).select('department role');
+      if (!canManageTargetUser(req.user, leaveUser)) {
+        return res.status(403).json({ error: 'You do not have access to this leave request.' });
+      }
     }
 
     const status = String(req.body.status || '').trim();
