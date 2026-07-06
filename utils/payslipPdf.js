@@ -166,28 +166,37 @@ function drawEmployeeInfo(canvas, rows) {
   const x = MARGIN;
   const y = 486;
   const width = PAGE_WIDTH - (MARGIN * 2);
-  const height = 144;
+  const headerHeight = 24;
   const half = width / 2;
   const rowHeight = 18;
   const labelWidth = 100;
+  const splitIndex = Math.ceil(rows.length / 2);
+  const leftRows = rows.slice(0, splitIndex);
+  const rightRows = rows.slice(splitIndex);
+  const bodyRows = Math.max(leftRows.length, rightRows.length);
+  const height = headerHeight + (bodyRows * rowHeight);
 
   canvas.rect(x, y, width, height);
-  canvas.rect(x, y + height - 24, width, 24, { fillGray: 0.92 });
+  canvas.rect(x, y + height - headerHeight, width, headerHeight, { fillGray: 0.92 });
   canvas.text('EMPLOYEE INFORMATION', x + 10, y + height - 16, { bold: true, size: 10 });
-  canvas.line(x + half, y, x + half, y + height - 24);
+  canvas.line(x + half, y, x + half, y + height - headerHeight);
 
-  rows.forEach((row, index) => {
-    const column = index < 7 ? 0 : 1;
-    const rowIndex = column === 0 ? index : index - 7;
+  [leftRows, rightRows].forEach((columnRows, column) => {
     const baseX = x + (column * half);
-    const baseY = y + height - 42 - (rowIndex * rowHeight);
+    const bodyTop = y + height - headerHeight;
 
-    if (rowIndex > 0) {
-      canvas.line(baseX, baseY + 13, baseX + half, baseY + 13, 0.3);
+    for (let rowIndex = 1; rowIndex < columnRows.length; rowIndex += 1) {
+      const lineY = bodyTop - (rowIndex * rowHeight);
+      canvas.line(baseX, lineY, baseX + half, lineY, 0.3);
     }
-    canvas.text(row.label, baseX + 10, baseY, { bold: true, size: 8.5 });
-    canvas.text(':', baseX + labelWidth, baseY, { size: 8.5 });
-    canvas.text(clampText(row.value, 22), baseX + labelWidth + 10, baseY, { size: 8.5 });
+
+    columnRows.forEach((row, rowIndex) => {
+      const rowTop = bodyTop - (rowIndex * rowHeight);
+      const textY = rowTop - 12;
+      canvas.text(row.label, baseX + 10, textY, { bold: true, size: 8.5 });
+      canvas.text(':', baseX + labelWidth, textY, { size: 8.5 });
+      canvas.text(clampText(row.value, 22), baseX + labelWidth + 10, textY, { size: 8.5 });
+    });
   });
 }
 
@@ -219,22 +228,29 @@ function drawSummary(canvas, rows, netWords) {
   const y = 104;
   const width = PAGE_WIDTH - (MARGIN * 2);
   const height = 98;
+  const headerHeight = 24;
+  const wordsHeight = 24;
   const labelX = x + 310;
   const amountRight = x + width - 14;
+  const bodyTop = y + height - headerHeight;
+  const bodyBottom = y + wordsHeight;
+  const bodyHeight = bodyTop - bodyBottom;
+  const rowHeight = bodyHeight / rows.length;
 
   canvas.rect(x, y, width, height);
-  canvas.rect(x, y + height - 24, width, 24, { fillGray: 0.92 });
+  canvas.rect(x, y + height - headerHeight, width, headerHeight, { fillGray: 0.92 });
   canvas.text('SALARY SUMMARY', x + 10, y + height - 16, { bold: true, size: 10 });
 
   rows.forEach((row, index) => {
-    const rowY = y + height - 43 - (index * 18);
+    const rowTop = bodyTop - (index * rowHeight);
+    const rowY = rowTop - 14;
     canvas.text(row.label, labelX, rowY, { bold: row.bold, size: row.size || 9 });
     canvas.rightText(formatMoney(row.value), amountRight, rowY, { bold: row.bold, size: row.size || 9 });
   });
 
-  canvas.line(x, y + 24, x + width, y + 24, 0.4);
-  canvas.text('Net Salary in Words:', x + 10, y + 10, { bold: true, size: 8.8 });
-  canvas.text(clampText(netWords, 78), x + 112, y + 10, { size: 8.8 });
+  canvas.line(x, bodyBottom, x + width, bodyBottom, 0.4);
+  canvas.text('Net Salary in Words:', x + 10, y + 9, { bold: true, size: 8.8 });
+  canvas.text(clampText(netWords, 78), x + 112, y + 9, { size: 8.8 });
 }
 
 function buildPayslipPdf(record) {
