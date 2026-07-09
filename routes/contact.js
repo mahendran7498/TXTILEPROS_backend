@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const Contact = require('../models/Contact');
 const nodemailer = require('nodemailer');
+const { requireAuth } = require('../middleware/auth');
+const { requireOwner } = require('../middleware/access');
 
 // Create transporter (configure with your SMTP in .env)
 const transporter = nodemailer.createTransport({
@@ -87,7 +89,7 @@ router.post('/', async (req, res) => {
 });
 
 // GET /api/contact (admin — protect this in production)
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, requireOwner, async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
     const filter = status ? { status } : {};
@@ -103,7 +105,7 @@ router.get('/', async (req, res) => {
 });
 
 // PATCH /api/contact/:id/status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', requireAuth, requireOwner, async (req, res) => {
   try {
     const contact = await Contact.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
     if (!contact) return res.status(404).json({ error: 'Not found' });

@@ -53,6 +53,7 @@ function registerRoutes() {
   app.use('/api/reports', require('../routes/reports'));
   app.use('/api/leaves', require('../routes/leaves'));
   app.use('/api/salaries', require('../routes/salaries'));
+  app.use('/api/contact', require('../routes/contact'));
   app.use('/api/reports', requireAuth, requireServiceModuleAccess, require('../routes/reports'));
   app.use('/api/leaves', requireAuth, requireServiceModuleAccess, require('../routes/leaves'));
   app.use('/api/admin', require('../routes/admin'));
