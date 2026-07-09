@@ -17,8 +17,9 @@ const {
 
 const router = express.Router();
 
-router.use(requireAuth, requireAnyRole(['owner', 'admin']));
-router.use(requireAuth);
+// Route-level middleware below decides which management endpoints managers can access.
+// The shared router guard must allow managers through so those checks can run.
+router.use(requireAuth, requireAnyRole(['admin', 'manager']));
 
 function requireManagementAccess(req, res, next) {
   if (isOwner(req.user) || req.user?.role === 'manager') {
